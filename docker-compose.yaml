@@ -1,9 +1,6 @@
-version: "3.9"
-
 services:
-
   postgres:
-    image: postgres:18
+    image: postgres:15-alpine
     container_name: multitenant-db
     restart: always
     environment:
@@ -13,43 +10,61 @@ services:
     ports:
       - "${DB_PORT}:5432"
     volumes:
-      - ./pgdata:/var/lib/postgresql/data
+    # Using a named volume for better data management and persistence
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - multitenant-net
 
   app:
     build: 
       context: .
       dockerfile: Dockerfile
+      target: development   # Use the development stage else docker will use the production stage by default
+    restart: always
     container_name: multitenant-app
-        env_file:
+    env_file:
       - .env
     environment:
-      - PORT=${PORT}
+       NODE_ENV: development
+       PORT: ${PORT}
        DATABASE_URL: ${DATABASE_URL}
        REDIS_URL: ${REDIS_URL}
+       REDIS_HOST: ${REDIS_HOST}
+       REDIS_PORT: ${REDIS_PORT}
     ports:
       - "${PORT}:${PORT}"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy 
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # volumes:
+    #   - ./src:/app/src
+    #   - ./nest-cli.json:/app/nest-cli.json
+    #   - ./tsconfig.json:/app/tsconfig.json 
+    #   - ./prisma:/app/prisma  # Ensure Prisma schema changes (from host) are reflected without rebuilding
+    #   - /app/node_modules # Avoid overwriting node_modules in the container 
     volumes:
-      - ./src:/app/src
-    command: >
-        sh -c "
-        npx prisma migrate deploy &&
-        node dist/main.js
-        "
+      - .:/app
+      - /app/node_modules  
     healthcheck:
-      test: ["CMD-SHELL", "curl", "-f", "http://localhost:${PORT}/health", "||", "exit", "1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${PORT}/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+    networks:
+      - multitenant-net
 
   pgadmin:
     image: dpage/pgadmin4
@@ -59,23 +74,31 @@ services:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
     ports:
-      - "${PGADMIN_HOST_PORT}:${PGADMIN_CONTAINER_PORT}"
+      - "${PGADMIN_HOST_PORT}:80"
     depends_on:
       - postgres
     networks:
       - multitenant-net
 
- redis:
-    image: redis:8
+  redis:
+    image: redis:7-alpine
     container_name: multitenant-redis
     restart: always
     ports:
       - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - multitenant-net
+
+volumes:
+  postgres_data:
+  redis_data:
 
 networks:
     multitenant-net:

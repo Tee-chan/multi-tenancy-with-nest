@@ -1,36 +1,49 @@
-# builder stage
-FROM node:20
+# development stage
+FROM node:20-alpine as development
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package*.json ./
 
 RUN npm install 
 
-COPY . .
+# COPY prisma ./prisma  #already mounted prisma in docker-compose.yml
 
-RUN npx prisma generate
-RUN npm run build 
+# RUN npx prisma generate  #do not run generate prisma client for development, generating in package.json(instart:dev script) for development.
 
 EXPOSE 3000
 
 CMD ["npm", "run", "start:dev"]
 
-# production stage
-FROM node:20
+# Build stage
+FROM node:20-alpine as build
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --omit=dev
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+RUN npm ci
+
+COPY . .
+
+RUN npx prisma generate
+
+RUN npm run build
+
+# production stage
+FROM node:20-alpine as production
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci --omit=dev
+
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/prisma ./prisma 
+
+RUN npx prisma generate
 
 EXPOSE 3000
 
-CMD sh -c "npx prisma migrate deploy && node dist/main.js"
-
-
-
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]

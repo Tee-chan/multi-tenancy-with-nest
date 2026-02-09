@@ -1,13 +1,25 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+
+  // Security headers
+  app.use(helmet());
+
+  // Cors
+  app.enableCors();
+
+  // Global prefix
+  app.setGlobalPrefix('api');
 
   // Global validation
-   app.useGlobalPipes(
+  app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
@@ -15,35 +27,34 @@ async function bootstrap() {
     }),
   );
 
-  // CORS
-  app.enableCors();
-
   // Swagger config
   const config = new DocumentBuilder()
     .setTitle('Product API')
     .setDescription('Multi-vendor product API with vendor isolation')
     .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'JWT',
-        description: 'Enter JWT token',
-        in: 'header',
-      },
-      'JWT-auth',
-    )
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('docs', app, document);
 
-  const port = process.env.PORT || 3000;
+  // Shutdown hooks (Docker/Prisma safe)
+  app.enableShutdownHooks();
+
+  const port = configService.get<number>('PORT', 3000);
+
+  try {
+    console.log('Testing database connection...');
+    console.log('DATABASE_URL:', process.env.DATABASE_URL);
+  } catch (error) {
+    console.error('Database connection failed:', error);
+  }
   await app.listen(port);
-  
-  console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`Swagger documentation: http://localhost:${port}/api`);
+
+  console.log(`Server running on http://localhost:${port}/api`);
+  console.log(`Swagger: http://localhost:${port}/docs`);
+
 }
 
 bootstrap();
+
