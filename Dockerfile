@@ -15,35 +15,35 @@ EXPOSE 3000
 
 CMD ["npm", "run", "start:dev"]
 
-# Build stage
-FROM node:20-alpine as build
+# # Build stage
+# FROM node:20-alpine as build
 
-WORKDIR /app
+# WORKDIR /app
 
-COPY package*.json ./
+# COPY package*.json ./
 
-RUN npm ci
+# RUN npm ci
 
-COPY . .
+# COPY . .
 
-RUN npx prisma generate
+# RUN npx prisma generate
 
-RUN npm run build
+# RUN npm run build
 
-# production stage
-FROM node:20-alpine as production
+# # production stage
+# FROM node:20-alpine as production
 
-WORKDIR /app
+# WORKDIR /app
 
-COPY package*.json ./
+# COPY package*.json ./
 
-RUN npm ci --omit=dev
+# RUN npm ci --omit=dev
 
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/prisma ./prisma 
+# COPY --from=build /app/dist ./dist
+# COPY --from=build /app/prisma ./prisma 
 
-RUN npx prisma generate
+# RUN npx prisma generate
 
-EXPOSE 3000
+# EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+# CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]

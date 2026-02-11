@@ -30,7 +30,7 @@ async function bootstrap() {
   // Swagger config
   const config = new DocumentBuilder()
     .setTitle('Product API')
-    .setDescription('Multi-vendor product API with vendor isolation')
+    .setDescription('Multi-tenant product API with vendor isolation')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
